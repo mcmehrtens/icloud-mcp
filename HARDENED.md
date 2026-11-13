@@ -135,7 +135,7 @@ Docker build that CI's `image` job does). If a push gets past the hook, CI passe
    docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550
    docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302
    docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069
-   renovatebot/github-action@1c0cf989c02653fba0efe7ca5772338860ca71dc
+   renovatebot/github-action@266fef21329c44765ad42f9dea1f01f5d2d91084
    ```
 
    Default workflow token: **read repository contents**.
