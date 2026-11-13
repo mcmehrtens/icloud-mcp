@@ -215,6 +215,20 @@ def extract_message_body(msg: email.message.Message, prefer_html: bool = False) 
     return body_text, body_html
 
 
+_UNTRUSTED_TAG_RE = re.compile(r"<\s*/?\s*untrusted_email_content\s*>", re.IGNORECASE)
+
+
+def mark_untrusted(text: str) -> str:
+    """Wrap third-party email text so the model treats it as data, not instructions.
+
+    Tags inside the text are defanged so a message cannot close the block early.
+    """
+    if not text:
+        return ""
+    text = _UNTRUSTED_TAG_RE.sub("[removed tag]", text)
+    return f"<untrusted_email_content>\n{text}\n</untrusted_email_content>"
+
+
 def message_summary(
     uid: Any, msg: email.message.Message, data: dict[Any, Any], folder: str, include_body: bool
 ) -> dict[str, Any]:
@@ -230,7 +244,8 @@ def message_summary(
         "has_attachments": bool(list_attachments(msg)),
     }
     if include_body:
-        item["body_text"], _ = extract_message_body(msg)
+        body_text, _ = extract_message_body(msg)
+        item["body_text"] = mark_untrusted(body_text)
     return item
 
 

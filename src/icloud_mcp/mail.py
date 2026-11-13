@@ -22,6 +22,7 @@ from .mail_utils import (
     flags_from_data,
     get_imap_client,
     list_attachments,
+    mark_untrusted,
     message_summary,
     parse_recipients,
     raw_message_from_data,
@@ -243,9 +244,9 @@ def _message_details(
     }
     if include_body:
         body_text, body_html = extract_message_body(msg, prefer_html=full_html)
-        result["body_text"] = body_text
+        result["body_text"] = mark_untrusted(body_text)
         if full_html:
-            result["body_html"] = body_html
+            result["body_html"] = mark_untrusted(body_html)
     result["attachments"] = list_attachments(msg)
     return result
 

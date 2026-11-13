@@ -116,7 +116,7 @@ def test_list_messages_newest_first(fake_imap):
     items = result.structured_content["result"]
     assert [i["id"] for i in items] == ["2", "1"]
     assert items[0]["unread"] is True and items[0]["has_attachments"] is True
-    assert items[0]["body_text"] == "hello two"
+    assert items[0]["body_text"] == "<untrusted_email_content>\nhello two\n</untrusted_email_content>"
 
 
 def test_unread_only(fake_imap):
