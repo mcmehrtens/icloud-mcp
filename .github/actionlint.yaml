@@ -1,0 +1,6 @@
+# actionlint (pinned in scripts/verify.sh) only knows GitHub-hosted runner labels up to
+# ubuntu-24.04. ubuntu-26.04 has been generally available since 2026-09-17; declare it
+# here until actionlint learns it, then delete this file.
+self-hosted-runner:
+  labels:
+    - ubuntu-26.04

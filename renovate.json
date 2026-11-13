@@ -68,6 +68,11 @@
       "schedule": ["on saturday"],
       "automerge": false,
       "labels": ["dependencies", "actions", "needs-allowlist"]
+    },
+    {
+      "description": "recurring-ical-events requires python-dateutil<3, so newer majors can't resolve and only leave a stuck dashboard entry. Drop this rule once it allows 3+.",
+      "matchPackageNames": ["python-dateutil"],
+      "allowedVersions": "<3"
     }
   ]
 }
