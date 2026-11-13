@@ -1,25 +1,21 @@
-"""Shared IMAP/SMTP primitives and MIME helpers (ported from the Resonar agent).
+"""Shared IMAP primitives and MIME helpers (ported from the Resonar agent).
 
 Highlights:
 - ``extract_message_body`` prefers text/plain, falls back to text/html, renders
   HTML to readable text (inscriptis) and caps the size so a marketing newsletter
   cannot blow up the model context.
 - Attachment discovery / selection helpers for ``email_get_attachment``.
-- Special folder discovery (Sent / Trash) via IMAP SPECIAL-USE flags with
+- Special folder discovery (Drafts) via IMAP SPECIAL-USE flags with
   iCloud-specific name fallbacks.
 """
 
 import email
 import email.message
 import logging
-import mimetypes
 import os
 import re
-import smtplib
 from dataclasses import asdict, dataclass
-from email import encoders
 from email.header import decode_header
-from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.utils import formataddr, getaddresses, parseaddr
@@ -32,7 +28,6 @@ from .config import config
 logger = logging.getLogger(__name__)
 
 BODY_KEYS = (b"BODY[]", "BODY[]", b"RFC822", "RFC822", b"BODY.PEEK[]")
-SENT_CANDIDATES = ("Sent Messages", "Sent", "Sent Items", "Sent Mail")
 DRAFTS_CANDIDATES = ("Drafts", "Draft")
 
 
@@ -70,19 +65,6 @@ def close_imap_client(client: IMAPClient | None) -> None:
             pass
 
 
-def get_smtp_client(username: str, password: str) -> smtplib.SMTP:
-    client = smtplib.SMTP(config.SMTP_SERVER, config.SMTP_PORT, timeout=60)
-    client.starttls()
-    try:
-        client.login(username, password)
-    except smtplib.SMTPAuthenticationError as e:
-        client.quit()
-        raise PermissionError(
-            f"SMTP login failed for {username}: {e}. Use an app-specific password."
-        ) from e
-    return client
-
-
 # ---------------------------------------------------------------------------
 # Folders
 # ---------------------------------------------------------------------------
@@ -108,21 +90,6 @@ def find_special_folder(client: IMAPClient, flag: bytes, preferred: str, candida
     for candidate in (preferred, *candidates):
         if candidate.lower() in lowered:
             return lowered[candidate.lower()]
-    return None
-
-
-def append_to_sent(client: IMAPClient, raw_message: bytes) -> str | None:
-    """Store a copy of an outgoing message in the Sent folder. Returns the folder used."""
-    folder = find_special_folder(client, b"\\Sent", config.SENT_FOLDER, SENT_CANDIDATES)
-    attempts = [folder] if folder else []
-    attempts += [name for name in (config.SENT_FOLDER, *SENT_CANDIDATES) if name not in attempts]
-    for name in attempts:
-        try:
-            client.append(name, raw_message, flags=["\\Seen"])
-            return name
-        except Exception as e:
-            logger.debug("Append to %s failed: %s", name, e)
-    logger.warning("Could not save message copy to any Sent folder")
     return None
 
 
@@ -393,45 +360,14 @@ def resolve_local_path(path: str, must_exist: bool) -> str:
     return resolved
 
 
-def build_attachment_parts(paths: list[str]) -> list[MIMEBase]:
-    parts: list[MIMEBase] = []
-    total = 0
-    for path in paths:
-        resolved = resolve_local_path(path, must_exist=True)
-        size = os.path.getsize(resolved)
-        total += size
-        if total > config.EMAIL_MAX_ATTACHMENT_BYTES:
-            raise ValueError(
-                f"Attachments exceed the {config.EMAIL_MAX_ATTACHMENT_BYTES // (1024 * 1024)} MB limit; "
-                "send fewer or smaller files."
-            )
-        mime_type, _ = mimetypes.guess_type(resolved)
-        maintype, _, subtype = (mime_type or "application/octet-stream").partition("/")
-        part = MIMEBase(maintype, subtype)
-        with open(resolved, "rb") as fh:
-            part.set_payload(fh.read())
-        encoders.encode_base64(part)
-        part.add_header("Content-Disposition", "attachment", filename=os.path.basename(resolved))
-        parts.append(part)
-    return parts
-
-
-def build_email_message(body: str, html: bool, attachment_parts: list[MIMEBase]) -> email.message.Message:
-    """Plain or HTML body (HTML gets a text/plain alternative), wrapped in multipart/mixed if needed."""
+def build_email_message(body: str, html: bool) -> email.message.Message:
+    """Plain or HTML body (HTML gets a text/plain alternative)."""
     if html:
-        body_part: email.message.Message = MIMEMultipart("alternative")
-        body_part.attach(MIMEText(normalize_email_body(body, max_chars=0), "plain", "utf-8"))
-        body_part.attach(MIMEText(body, "html", "utf-8"))
-    else:
-        body_part = MIMEText(body, "plain", "utf-8")
-
-    if not attachment_parts:
-        return body_part
-    msg = MIMEMultipart("mixed")
-    msg.attach(body_part)
-    for part in attachment_parts:
-        msg.attach(part)
-    return msg
+        msg: email.message.Message = MIMEMultipart("alternative")
+        msg.attach(MIMEText(normalize_email_body(body, max_chars=0), "plain", "utf-8"))
+        msg.attach(MIMEText(body, "html", "utf-8"))
+        return msg
+    return MIMEText(body, "plain", "utf-8")
 
 
 _TAG_RE = re.compile(r"<\s*/?\s*[a-zA-Z][a-zA-Z0-9-]*(\s[^<>]*)?/?\s*>")
@@ -488,7 +424,7 @@ def check_recipients_allowed(addresses: list[str]) -> None:
 
 
 def bare_addresses(recipients: list[str]) -> list[str]:
-    """SMTP envelope addresses for a list produced by parse_recipients."""
+    """Bare addresses for a list produced by parse_recipients."""
     return [parseaddr(r)[1] for r in recipients]
 
 

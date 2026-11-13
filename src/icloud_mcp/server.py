@@ -19,7 +19,7 @@ from .config import config, configure_logging
 
 logger = logging.getLogger(__name__)
 
-INSTRUCTIONS = f"""iCloud MCP server v{__version__}: Calendar (CalDAV), Contacts (CardDAV) and Mail (IMAP/SMTP) for one iCloud account per request.
+INSTRUCTIONS = f"""iCloud MCP server v{__version__}: Calendar (CalDAV), Contacts (CardDAV) and Mail (IMAP) for one iCloud account.
 
 Conventions:
 - Calendar and contact IDs are full URLs returned by the list/search tools; pass them back verbatim.
@@ -29,8 +29,9 @@ Conventions:
 - Recurring events are expanded by calendar_list_events: each occurrence is a separate entry sharing the series id; updates affect the whole series.
 - This server cannot delete or move anything: there are no delete tools for events, contacts or mail.
 - Email bodies are converted to readable text and truncated to {config.EMAIL_BODY_MAX_CHARS} characters; use email_get_message with full_html=true for the raw HTML.
-- Sending mail and creating/updating events are irreversible: confirm the details with the user first when in doubt. Use email_save_draft when the user wants to review before sending.
-- Enabled tool groups: {", ".join(sorted(config.ENABLED_CATEGORIES))}.{" Outbound recipients are restricted by EMAIL_SEND_ALLOWLIST." if config.EMAIL_SEND_ALLOWLIST else ""}
+- This server cannot send mail or calendar invitations. To prepare a message use email_save_draft; the user reviews and sends it from their own mail client.
+- Creating or updating events changes the user's calendar: confirm the details with the user first when in doubt. Events that have attendees cannot be updated.
+- Enabled tool groups: {", ".join(sorted(config.ENABLED_CATEGORIES))}.{" Draft recipients are restricted by EMAIL_SEND_ALLOWLIST." if config.EMAIL_SEND_ALLOWLIST else ""}
 """
 
 mcp = FastMCP(
@@ -129,7 +130,6 @@ Reminders = Annotated[
     list[int | str] | None,
     Field(description="Alerts: minutes before the event start (e.g. [60, 10]; 0 = at start, negative = after start) or a time of day on the event's date as 'HH:MM' (e.g. ['09:00'] for an all-day event)."),
 ]
-Attendees = Annotated[list[str] | None, Field(description="Attendee email addresses. Each receives an iTIP invitation by email.")]
 
 
 @tool("calendar", annotations=READ_ONLY)
@@ -208,20 +208,18 @@ def calendar_create_event(
     end: Annotated[str, Field(description="End, same format as start. For all-day events the end date is inclusive.")],
     description: Annotated[str | None, Field(description="Event notes.")] = None,
     location: Annotated[str | None, Field(description="Event location.")] = None,
-    attendees: Attendees = None,
     calendar_id: CalendarId = None,
     timezone: Timezone = None,
     rrule: Rrule = None,
     reminders: Reminders = None,
 ) -> dict[str, Any]:
-    """Create a calendar event (optionally recurring, with alerts) and email iTIP invitations to attendees.
+    """Create a calendar event (optionally recurring, with alerts). No invitations are sent.
 
-    Returns the created event including its id/url. If some invitations could not be sent,
-    `invitations_failed` lists those addresses.
+    Returns the created event including its id/url.
     """
     return _run(
         calendar.create_event,
-        summary, start, end, description, location, attendees, calendar_id, timezone, rrule, reminders,
+        summary, start, end, description, location, calendar_id, timezone, rrule, reminders,
     )
 
 
@@ -233,15 +231,17 @@ def calendar_update_event(
     end: Annotated[str | None, Field(description="New end, same format as start.")] = None,
     description: Annotated[str | None, Field(description="New notes (empty string clears).")] = None,
     location: Annotated[str | None, Field(description="New location (empty string clears).")] = None,
-    attendees: Annotated[list[str] | None, Field(description="New attendee list; replaces the existing one and sends updated invitations.")] = None,
     timezone: Annotated[str | None, Field(description="IANA timezone for the new start/end. Omit to keep the event's current timezone.")] = None,
     rrule: Annotated[str | None, Field(description="New recurrence rule for the whole series (e.g. 'FREQ=WEEKLY;BYDAY=TU'). Pass '' to make the event non-recurring.")] = None,
     reminders: Annotated[list[int | str] | None, Field(description="New alerts as minutes before start or 'HH:MM' (replaces existing alerts; [] removes all).")] = None,
 ) -> dict[str, Any]:
-    """Update fields of an existing event. Only provided fields change; recurring series are updated as a whole."""
+    """Update fields of an existing event. Only provided fields change; recurring series are updated as a whole.
+
+    Events with attendees are refused: iCloud would email the change to every attendee.
+    """
     return _run(
         calendar.update_event,
-        event_id, summary, start, end, description, location, attendees, timezone, rrule, reminders,
+        event_id, summary, start, end, description, location, timezone, rrule, reminders,
     )
 
 
@@ -385,28 +385,6 @@ def email_get_attachment(
 
 
 @tool("email", annotations=WRITE)
-def email_send(
-    to: Annotated[str, Field(description="Recipient address(es), comma-separated.")],
-    subject: Annotated[str, Field(description="Subject line.")],
-    body: Annotated[str, Field(description="Message body (plain text, or HTML when html=true).")],
-    cc: Annotated[str | None, Field(description="CC address(es), comma-separated.")] = None,
-    bcc: Annotated[str | None, Field(description="BCC address(es), comma-separated.")] = None,
-    html: Annotated[bool, Field(description="Treat body as HTML (a plain-text alternative is generated automatically).")] = False,
-    attachment_paths: Annotated[
-        list[str] | None,
-        Field(description="Local file paths (on the machine running this server) to attach. Only available when local file access is enabled (default for stdio)."),
-    ] = None,
-    reply_to_message_id: Annotated[str | None, Field(description="UID of a message to reply to; sets In-Reply-To/References so mail clients thread the reply.")] = None,
-    reply_to_folder: Annotated[str, Field(description="Folder of reply_to_message_id.")] = "INBOX",
-) -> dict[str, Any]:
-    """Send an email from the account (SMTP) and store a copy in the Sent folder."""
-    return _run(
-        mail_module.send_message,
-        to, subject, body, cc, bcc, html, attachment_paths, reply_to_message_id, reply_to_folder,
-    )
-
-
-@tool("email", annotations=WRITE)
 def email_save_draft(
     subject: Annotated[str, Field(description="Subject line.")],
     body: Annotated[str, Field(description="Message body (plain text, or HTML when html=true).")],
@@ -414,14 +392,13 @@ def email_save_draft(
     cc: Annotated[str | None, Field(description="CC address(es).")] = None,
     bcc: Annotated[str | None, Field(description="BCC address(es).")] = None,
     html: Annotated[bool, Field(description="Treat body as HTML.")] = False,
-    attachment_paths: Annotated[list[str] | None, Field(description="Local file paths to attach (see email_send).")] = None,
     reply_to_message_id: Annotated[str | None, Field(description="UID of a message this draft replies to.")] = None,
     reply_to_folder: Annotated[str, Field(description="Folder of reply_to_message_id.")] = "INBOX",
 ) -> dict[str, Any]:
     """Save a message to the Drafts folder without sending it, so the user can review and send it from any mail client."""
     return _run(
         mail_module.save_draft,
-        to, subject, body, cc, bcc, html, attachment_paths, reply_to_message_id, reply_to_folder,
+        to, subject, body, cc, bcc, html, reply_to_message_id, reply_to_folder,
     )
 
 

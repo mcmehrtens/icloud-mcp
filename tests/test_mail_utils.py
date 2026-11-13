@@ -79,7 +79,7 @@ def test_message_summary_fields():
 
 
 def test_build_email_message_html_gets_plain_alternative():
-    msg = mail_utils.build_email_message("<p>Hi <b>there</b></p>", html=True, attachment_parts=[])
+    msg = mail_utils.build_email_message("<p>Hi <b>there</b></p>", html=True)
     kinds = [p.get_content_type() for p in msg.walk()]
     assert kinds == ["multipart/alternative", "text/plain", "text/html"]
     plain = [p for p in msg.walk() if p.get_content_type() == "text/plain"][0]
@@ -97,18 +97,6 @@ def test_local_files_gate(tmp_path, monkeypatch):
     assert mail_utils.resolve_local_path(str(inside), must_exist=True) == str(inside.resolve())
     with pytest.raises(PermissionError):
         mail_utils.resolve_local_path("/etc/hosts", must_exist=True)
-
-
-def test_build_attachment_parts(tmp_path, monkeypatch):
-    monkeypatch.setattr(config, "LOCAL_FILES", True)
-    monkeypatch.setattr(config, "LOCAL_FILES_ROOT", None)
-    f = tmp_path / "note.txt"
-    f.write_text("hello")
-    parts = mail_utils.build_attachment_parts([str(f)])
-    assert parts[0].get_filename() == "note.txt" and parts[0].get_content_type() == "text/plain"
-    monkeypatch.setattr(config, "EMAIL_MAX_ATTACHMENT_BYTES", 2)
-    with pytest.raises(ValueError, match="limit"):
-        mail_utils.build_attachment_parts([str(f)])
 
 
 def test_split_addresses():

@@ -153,11 +153,3 @@ def test_send_allowlist(monkeypatch):
     monkeypatch.setattr(config, "EMAIL_SEND_ALLOWLIST", frozenset())
     mail_utils.check_recipients_allowed(["anyone@anywhere.test"])
 
-
-def test_attendees_respect_allowlist(monkeypatch):
-    monkeypatch.setattr(config, "EMAIL_SEND_ALLOWLIST", frozenset({"@ok.test"}))
-    assert calendar._validate_attendees(["Bob <bob@ok.test>", "amy@ok.test"]) == ["bob@ok.test", "amy@ok.test"]
-    with pytest.raises(PermissionError):
-        calendar._validate_attendees(["x@evil.test"])
-    with pytest.raises(ValueError):
-        calendar._validate_attendees(["not-an-address"])

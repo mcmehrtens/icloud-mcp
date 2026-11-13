@@ -127,15 +127,12 @@ def test_create_event_builds_valid_ical(monkeypatch):
     monkeypatch.setattr(calendar, "require_auth", lambda: ("me@icloud.com", "pw"))
     monkeypatch.setattr(calendar, "_get_caldav_client", lambda e, p: object())
     monkeypatch.setattr(calendar, "_resolve_calendar", lambda client, cid, e, p: fake)
-    sent = []
-    monkeypatch.setattr(calendar, "_send_calendar_invitation", lambda *a, **k: sent.append(a[2]))
 
     result = calendar.create_event(
         "Standup, daily",
         "2025-06-02T09:30:00",
         "2025-06-02T09:45:00",
         description="Line1\nLine2",
-        attendees=["a@x.com", "me@icloud.com"],
         timezone="Europe/Berlin",
         rrule="FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR",
     )
@@ -147,7 +144,7 @@ def test_create_event_builds_valid_ical(monkeypatch):
     assert "BEGIN:VTIMEZONE" in fake.ical and "TZID:Europe/Berlin" in fake.ical
     assert "DTSTART;TZID=Europe/Berlin:20250602T093000" in fake.ical
     assert result["timezone"] == "Europe/Berlin"
-    assert sent == ["a@x.com"]  # organizer is not invited to their own event
+    assert "ATTENDEE" not in fake.ical and "ORGANIZER" not in fake.ical
 
 
 def test_create_all_day_event(monkeypatch):
@@ -234,3 +231,36 @@ def test_create_all_day_event_with_time_of_day_reminder(monkeypatch):
     monkeypatch.setattr(calendar, "_resolve_calendar", lambda client, cid, e, p: fake)
     result = calendar.create_event("Birthday", "2025-06-02", "2025-06-02", reminders=["09:00"])
     assert "TRIGGER:PT540M" in fake.ical and result["reminders"] == [-540]
+
+
+class _LoadedEvent:
+    def __init__(self, ical):
+        self.vobject_instance = vobject.readOne(ical)
+        self.url = "https://p1-caldav.icloud.com/123/calendars/work/x.ics"
+
+
+class _RecordingClient:
+    def __init__(self):
+        self.puts = []
+
+    def put(self, url, body, headers):
+        self.puts.append(body)
+
+
+def test_update_refuses_events_with_attendees(monkeypatch):
+    client = _RecordingClient()
+    monkeypatch.setattr(calendar, "require_auth", lambda: ("me@icloud.com", "pw"))
+    monkeypatch.setattr(calendar, "_load_event", lambda eid, e, p: (client, _LoadedEvent(SAMPLE)))
+    with pytest.raises(PermissionError, match="email other people"):
+        calendar.update_event("https://p1-caldav.icloud.com/123/calendars/work/x.ics", summary="x")
+    assert client.puts == []
+
+
+def test_update_event_without_attendees_saves(monkeypatch):
+    client = _RecordingClient()
+    solo = SAMPLE.replace("ATTENDEE;CN=a@x.com:mailto:a@x.com\n", "")
+    monkeypatch.setattr(calendar, "require_auth", lambda: ("me@icloud.com", "pw"))
+    monkeypatch.setattr(calendar, "_load_event", lambda eid, e, p: (client, _LoadedEvent(solo)))
+    result = calendar.update_event("https://p1-caldav.icloud.com/123/calendars/work/x.ics", summary="Renamed")
+    assert result["summary"] == "Renamed"
+    assert len(client.puts) == 1 and "ATTENDEE" not in client.puts[0]

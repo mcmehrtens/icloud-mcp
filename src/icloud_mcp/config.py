@@ -68,9 +68,7 @@ class Config:
     CALDAV_SERVER: str = os.getenv("CALDAV_SERVER", "https://caldav.icloud.com")
     CARDDAV_SERVER: str = os.getenv("CARDDAV_SERVER", "https://contacts.icloud.com")
     IMAP_SERVER: str = os.getenv("IMAP_SERVER", "imap.mail.me.com")
-    SMTP_SERVER: str = os.getenv("SMTP_SERVER", "smtp.mail.me.com")
     IMAP_PORT: int = int(os.getenv("IMAP_PORT", "993"))
-    SMTP_PORT: int = int(os.getenv("SMTP_PORT", "587"))
 
     # MCP transport
     MCP_SERVER_HOST: str = os.getenv("MCP_SERVER_HOST", "0.0.0.0")
@@ -79,7 +77,6 @@ class Config:
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO").upper()
 
     # Mail folders (iCloud names; discovered via IMAP special-use flags when possible)
-    SENT_FOLDER: str = os.getenv("SENT_FOLDER", "Sent Messages")
     DRAFTS_FOLDER: str = os.getenv("DRAFTS_FOLDER", "Drafts")
 
     # Which tool groups to expose: any of calendar, contacts, email (alias: mail).
@@ -101,13 +98,10 @@ class Config:
 
     # Size limits
     EMAIL_BODY_MAX_CHARS: int = int(os.getenv("EMAIL_BODY_MAX_CHARS", "20000"))
-    # Outbound recipients (email_send, email_save_draft, calendar invitations) must match
-    # one of these entries when set: full addresses or domains ("@example.com").
+    # Draft recipients (email_save_draft) must match one of these entries when set:
+    # full addresses or domains ("@example.com").
     EMAIL_SEND_ALLOWLIST: frozenset[str] = frozenset(
         x.strip().lower() for x in os.getenv("EMAIL_SEND_ALLOWLIST", "").split(",") if x.strip()
-    )
-    EMAIL_MAX_ATTACHMENT_BYTES: int = int(
-        os.getenv("EMAIL_MAX_ATTACHMENT_BYTES", str(20 * 1024 * 1024))
     )
 
     # Calendar defaults
@@ -125,8 +119,8 @@ class Config:
 
     DEFAULT_TIMEZONE: str = os.getenv("DEFAULT_TIMEZONE") or _local_timezone_name()
 
-    # Local filesystem access for attachments (save downloaded attachments,
-    # attach local files to outgoing mail). ``None`` means "decide by transport":
+    # Local filesystem access for attachments (save downloaded attachments).
+    # ``None`` means "decide by transport":
     # enabled for stdio (the server runs on the user's machine), disabled for HTTP.
     LOCAL_FILES: bool | None = _env_bool("ICLOUD_MCP_LOCAL_FILES", None)
     LOCAL_FILES_ROOT: str | None = os.getenv("ICLOUD_MCP_LOCAL_FILES_ROOT") or None

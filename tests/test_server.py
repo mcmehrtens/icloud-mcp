@@ -183,37 +183,6 @@ def test_auth_error_is_tool_error(monkeypatch):
     assert result.is_error and "Authentication required" in result.content[0].text
 
 
-def test_send_message(fake_imap, monkeypatch):
-    sent = {}
-
-    class FakeSMTP:
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *a):
-            return False
-
-        def send_message(self, msg, from_addr, to_addrs):
-            sent["msg"] = msg
-            sent["to"] = to_addrs
-
-    monkeypatch.setattr(mail_module, "get_smtp_client", lambda u, p: FakeSMTP())
-    result = _call(
-        "email_send",
-        to="x@example.com, y@example.com",
-        subject="Hi",
-        body="<p>Hello</p>",
-        html=True,
-        bcc="z@example.com",
-        reply_to_message_id="1",
-    ).structured_content
-    assert sent["to"] == ["x@example.com", "y@example.com", "z@example.com"]
-    assert sent["msg"]["In-Reply-To"] == "<first@example.com>"
-    assert "Bcc" not in sent["msg"]
-    assert result["saved_to_folder"] == "Sent Messages"
-    assert fake_imap.appended[0] == "Sent Messages"
-
-
 def test_instructions_and_annotations():
     async def run():
         async with Client(server.mcp) as client:
@@ -240,14 +209,12 @@ def test_save_draft(fake_imap):
     assert b"In-Reply-To: <first@example.com>" in raw
 
 
-def test_send_rejects_header_injection(fake_imap, monkeypatch):
-    called = []
-    monkeypatch.setattr(mail_module, "get_smtp_client", lambda u, p: called.append(1))
-    result = _call("email_send", to="x@example.com\r\nBcc: v@example.com", subject="s", body="b")
+def test_draft_rejects_header_injection(fake_imap):
+    result = _call("email_save_draft", to="x@example.com\r\nBcc: v@example.com", subject="s", body="b")
     assert result.is_error and "line breaks" in result.content[0].text
-    result = _call("email_send", to="x@example.com", subject="s\nX: y", body="b")
+    result = _call("email_save_draft", to="x@example.com", subject="s\nX: y", body="b")
     assert result.is_error
-    assert not called
+    assert not hasattr(fake_imap, "appended")
 
 
 def test_foreign_event_url_is_rejected():
@@ -273,3 +240,24 @@ def test_destructive_tools_are_gone():
         "contacts_delete",
     }
     assert not removed & _tool_names()
+
+
+def test_nothing_can_send_mail():
+    import pathlib
+
+    assert "email_send" not in _tool_names()
+    source = pathlib.Path(server.__file__).parent
+    for path in source.glob("*.py"):
+        text = path.read_text()
+        assert "smtplib" not in text and "SMTP(" not in text, path.name
+
+
+def test_draft_tool_has_no_attachment_paths():
+    async def run():
+        async with Client(server.mcp) as client:
+            return {t.name: t for t in await client.list_tools()}
+
+    tools = asyncio.run(run())
+    assert "attachment_paths" not in tools["email_save_draft"].input_schema["properties"]
+    for name in ("calendar_create_event", "calendar_update_event"):
+        assert "attendees" not in tools[name].input_schema["properties"]
