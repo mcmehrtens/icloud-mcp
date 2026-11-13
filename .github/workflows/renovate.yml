@@ -1,0 +1,56 @@
+name: renovate
+
+# Self-hosted Renovate with a GitHub App token, so its PRs trigger the gating CI
+# (PRs made with the default GITHUB_TOKEN would not). Runs daily so dependency and
+# base-image updates flow quickly (still behind the 3-day minimumReleaseAge). The
+# GitHub Actions group is scheduled for Saturdays in renovate.json.
+
+on:
+  schedule:
+    - cron: "0 13 * * *"
+  workflow_dispatch:
+    inputs:
+      logLevel:
+        description: Log level
+        type: choice
+        default: info
+        options:
+          - info
+          - debug
+
+concurrency:
+  group: renovate
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  renovate:
+    name: Self-hosted Renovate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Generate app token
+        id: app-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ secrets.RENOVATE_CLIENT_ID }}
+          private-key: ${{ secrets.RENOVATE_APP_PRIVATE_KEY }}
+          # Only what Renovate needs, not the installation's full grant.
+          permission-contents: write
+          permission-pull-requests: write
+          permission-issues: write # dependency dashboard
+          permission-workflows: write # bump SHA-pinned actions in .github/workflows
+          permission-checks: write
+          permission-statuses: write
+          permission-vulnerability-alerts: read
+          permission-administration: read # detect branch protection for automerge
+
+      - name: Renovate
+        uses: renovatebot/github-action@1c0cf989c02653fba0efe7ca5772338860ca71dc # v46.3.12
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+        env:
+          LOG_LEVEL: ${{ inputs.logLevel || 'info' }}
+          RENOVATE_REPOSITORIES: ${{ github.repository }}

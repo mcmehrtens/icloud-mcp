@@ -1,0 +1,72 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    "helpers:pinGitHubActionDigests",
+    "docker:pinDigests"
+  ],
+  "baseBranchPatterns": ["hardened"],
+  "timezone": "America/Chicago",
+  "labels": ["dependencies"],
+  "minimumReleaseAge": "3 days",
+  "internalChecksFilter": "strict",
+  "prConcurrentLimit": 5,
+  "lockFileMaintenance": {
+    "enabled": true,
+    "automerge": true,
+    "schedule": ["on saturday"]
+  },
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "labels": ["dependencies", "security"],
+    "automerge": true
+  },
+  "osvVulnerabilityAlerts": true,
+  "customManagers": [
+    {
+      "description": "Tool images pinned in scripts (e.g. actionlint in scripts/verify.sh).",
+      "customType": "regex",
+      "managerFilePatterns": ["/^scripts/.+\\.sh$/"],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\n[A-Z_]+=\"[^:\"]+:(?<currentValue>[^@\"]+)@(?<currentDigest>sha256:[a-f0-9]+)\""
+      ]
+    }
+  ],
+  "packageRules": [
+    {
+      "description": "Python deps keep their >= ranges in pyproject; only uv.lock moves.",
+      "matchManagers": ["pep621"],
+      "rangeStrategy": "update-lockfile"
+    },
+    {
+      "description": "Patch, minor and digest bumps merge themselves once CI is green.",
+      "matchUpdateTypes": ["minor", "patch", "pin", "pinDigest", "digest"],
+      "automerge": true,
+      "automergeType": "pr",
+      "platformAutomerge": true
+    },
+    {
+      "description": "Major bumps always get a PR for a human (or an LLM) to review.",
+      "matchUpdateTypes": ["major"],
+      "automerge": false,
+      "labels": ["dependencies", "major", "needs-review"]
+    },
+    {
+      "description": "A new Python minor (3.13 -> 3.14) can break things: review like a major.",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["docker.io/library/python", "python"],
+      "matchUpdateTypes": ["minor"],
+      "automerge": false,
+      "labels": ["dependencies", "needs-review"]
+    },
+    {
+      "description": "All GitHub Actions bumps in one weekly PR. Never automerged: the repo's Actions allowlist pins exact SHAs, so each bump needs its new SHAs allowlisted first (the PR fails with startup_failure until then).",
+      "matchManagers": ["github-actions"],
+      "matchUpdateTypes": ["!lockFileMaintenance"],
+      "groupName": "github actions",
+      "schedule": ["on saturday"],
+      "automerge": false,
+      "labels": ["dependencies", "actions", "needs-allowlist"]
+    }
+  ]
+}

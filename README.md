@@ -1,5 +1,9 @@
 # iCloud MCP Server
 
+> **Hardened fork.** This branch can't send mail, invite attendees or delete anything, and it takes
+> credentials only from the environment. See [HARDENED.md](HARDENED.md) for what changed. The rest of this
+> README is upstream's and still describes removed tools (`email_send`, deletes, contact writes).
+
 [Model Context Protocol](https://modelcontextprotocol.io) server for iCloud. Gives Claude (Desktop, Code, claude.ai connectors) and any other MCP client full access to an iCloud account:
 
 - **Calendar** (CalDAV): list/search/create/update/delete events, recurring events (RRULE), alerts (VALARM), IANA timezones, all-day events, iTIP invitations and cancellations by email.

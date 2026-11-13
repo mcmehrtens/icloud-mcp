@@ -1,0 +1,156 @@
+name: upstream-sync
+
+# Weekly: if mike-tih/icloud-mcp has new commits, merge them into a `sync/upstream`
+# branch, run the tests, and open (or refresh) a PR into `hardened` for review.
+# It never merges into `hardened` itself. On a merge conflict it opens an issue instead.
+#
+# Upstream code is untrusted until reviewed, so it only ever runs in the `merge` job,
+# which has a read-only token that isn't persisted to disk. The `publish` job holds
+# a write token (the Renovate GitHub App's, so the PR triggers the gating CI) and
+# runs no repository code: it only pushes the tested branch (handed over as a git
+# bundle) and opens the PR.
+
+on:
+  schedule:
+    - cron: "0 13 * * 6" # weekly jobs: Saturday 13:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: upstream-sync
+  cancel-in-progress: false
+
+jobs:
+  merge:
+    runs-on: ubuntu-24.04
+    outputs:
+      count: ${{ steps.check.outputs.count }}
+      upstream_sha: ${{ steps.check.outputs.upstream_sha }}
+      conflict: ${{ steps.merge.outputs.conflict }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: hardened
+          fetch-depth: 0
+          persist-credentials: false
+
+      - id: check
+        run: |
+          git remote add upstream https://github.com/mike-tih/icloud-mcp.git
+          git fetch --no-tags upstream main
+          count="$(git rev-list --count HEAD..upstream/main)"
+          echo "new upstream commits: $count"
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+          echo "upstream_sha=$(git rev-parse upstream/main)" >> "$GITHUB_OUTPUT"
+
+      - id: merge
+        if: steps.check.outputs.count != '0'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -C sync/upstream
+          if git merge --no-ff --no-edit upstream/main; then
+            echo "conflict=false" >> "$GITHUB_OUTPUT"
+          else
+            git merge --abort
+            echo "conflict=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - if: steps.merge.outputs.conflict == 'false'
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+
+      - if: steps.merge.outputs.conflict == 'false'
+        run: |
+          uv lock
+          if ! git diff --quiet uv.lock; then
+            git add uv.lock
+            git commit -m "Refresh uv.lock after upstream merge"
+          fi
+          uv sync --locked --python 3.13
+          uv run ruff check .
+          uv run pytest -q
+          git log --oneline hardened..upstream/main > upstream-commits.txt
+          git bundle create sync.bundle hardened..sync/upstream
+
+      - if: steps.merge.outputs.conflict == 'false'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sync
+          path: |
+            sync.bundle
+            upstream-commits.txt
+          retention-days: 7
+
+  publish:
+    needs: merge
+    if: needs.merge.outputs.count != '0' && needs.merge.outputs.conflict == 'false'
+    runs-on: ubuntu-24.04
+    env:
+      COUNT: ${{ needs.merge.outputs.count }}
+      UPSTREAM_SHA: ${{ needs.merge.outputs.upstream_sha }}
+    steps:
+      - name: Generate app token
+        id: app-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ secrets.RENOVATE_CLIENT_ID }}
+          private-key: ${{ secrets.RENOVATE_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      # Needs the persisted token to push. This job runs no repository code and
+      # uploads no artifacts, so the credential can't leak.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1 # zizmor: ignore[artipacked]
+        with:
+          ref: hardened
+          fetch-depth: 0
+          token: ${{ steps.app-token.outputs.token }}
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: sync
+          path: ${{ runner.temp }}/sync
+
+      - env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          git fetch "${RUNNER_TEMP}/sync/sync.bundle" "sync/upstream:sync/upstream"
+          git push --force origin sync/upstream
+          {
+            echo "Merges ${COUNT} new upstream commit(s) from mike-tih/icloud-mcp (\`${UPSTREAM_SHA}\`) into \`hardened\`."
+            echo "Ruff and the test suite passed on this branch."
+            echo
+            echo "**Review before merging.** Look especially for new tools, \`smtplib\`/SMTP, credential handling,"
+            echo "URL handling and anything that sends data off the box. Then check that the gateway allowlist"
+            echo "still matches. See HARDENED.md."
+            echo
+            echo '```'
+            cat "${RUNNER_TEMP}/sync/upstream-commits.txt"
+            echo '```'
+          } > "${RUNNER_TEMP}/body.md"
+          if [ "$(gh pr view sync/upstream --json state --jq .state 2>/dev/null)" = "OPEN" ]; then
+            gh pr edit sync/upstream --body-file "${RUNNER_TEMP}/body.md"
+          else
+            gh pr create --base hardened --head sync/upstream \
+              --title "Merge upstream mike-tih/icloud-mcp" --body-file "${RUNNER_TEMP}/body.md"
+          fi
+
+  conflict:
+    needs: merge
+    if: needs.merge.outputs.conflict == 'true'
+    runs-on: ubuntu-24.04
+    permissions:
+      issues: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      UPSTREAM_SHA: ${{ needs.merge.outputs.upstream_sha }}
+    steps:
+      - run: |
+          open="$(gh issue list --state open --search 'in:title "Upstream merge conflict"' --json number --jq 'length')"
+          if [ "$open" = "0" ]; then
+            gh issue create --title "Upstream merge conflict (mike-tih/icloud-mcp ${UPSTREAM_SHA:0:7})" \
+              --body "Merging upstream \`${UPSTREAM_SHA}\` into \`hardened\` conflicts. Merge it by hand (see HARDENED.md)."
+          fi

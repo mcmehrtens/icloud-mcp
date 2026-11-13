@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# Fast checks on what's being committed (the lint-staged equivalent):
+#   - Python: `ruff check --fix`, re-staging the fixes. A file that also has unstaged
+#     edits is only checked, never auto-fixed, so a partial stage is never widened.
+#   - Workflows: zizmor and actionlint, when any workflow file is staged.
+#   - JSON: must parse.
+# The full gate set runs on pre-push (scripts/verify.sh).
+# Written for macOS's bash 3.2: no mapfile, no empty-array expansion under `set -u`.
+set -euo pipefail
+
+cd "$(git rev-parse --show-toplevel)"
+
+staged() { git diff --cached --name-only --diff-filter=ACMR -z -- "$@"; }
+
+fixable=()
+check_only=()
+while IFS= read -r -d '' f; do
+  if git diff --quiet -- "$f"; then fixable+=("$f"); else check_only+=("$f"); fi
+done < <(staged '*.py')
+
+if [ "${#fixable[@]}" -gt 0 ]; then
+  uv run --locked ruff check --fix -- "${fixable[@]}"
+  git add -- "${fixable[@]}"
+fi
+if [ "${#check_only[@]}" -gt 0 ]; then
+  uv run --locked ruff check -- "${check_only[@]}"
+fi
+
+if [ -n "$(staged '.github/workflows/*.yml' '.github/workflows/*.yaml' | tr -d '\0')" ]; then
+  uv run --locked zizmor --offline .github/workflows
+  image="$(sed -n 's/^ACTIONLINT_IMAGE="\(.*\)"$/\1/p' scripts/verify.sh)"
+  docker run --rm -v "$PWD:/repo:ro" -w /repo "$image" -color=false
+fi
+
+while IFS= read -r -d '' f; do
+  python3 -m json.tool -- "$f" >/dev/null || { echo "invalid JSON: $f" >&2; exit 1; }
+done < <(staged '*.json')
