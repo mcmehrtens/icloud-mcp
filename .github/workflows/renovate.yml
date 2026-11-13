@@ -3,7 +3,8 @@ name: renovate
 # Self-hosted Renovate with a GitHub App token, so its PRs trigger the gating CI
 # (PRs made with the default GITHUB_TOKEN would not). Runs daily so dependency and
 # base-image updates flow quickly (still behind the 3-day minimumReleaseAge). The
-# GitHub Actions group is scheduled for Saturdays in renovate.json.
+# GitHub Actions group is scheduled for Saturdays in renovate.json. Run it now with
+# `gh workflow run renovate.yml` (add `-f logLevel=debug` to troubleshoot).
 
 on:
   schedule:

@@ -8,7 +8,7 @@ name: upstream-sync
 # which has a read-only token that isn't persisted to disk. The `publish` job holds
 # a write token (the Renovate GitHub App's, so the PR triggers the gating CI) and
 # runs no repository code: it only pushes the tested branch (handed over as a git
-# bundle) and opens the PR.
+# bundle) and opens the PR. Run it now with `gh workflow run upstream-sync.yml`.
 
 on:
   schedule:

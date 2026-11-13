@@ -7,7 +7,7 @@ name: release
 #
 # Skips (and stays green) when HEAD is already released, or when `ci` hasn't passed
 # on HEAD's push yet. Runs at 15:00 UTC, two hours after Renovate, so the morning's
-# automerges are included.
+# automerges are included. Release now with `gh workflow run release.yml`.
 
 on:
   schedule:
