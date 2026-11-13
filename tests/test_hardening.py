@@ -1,7 +1,6 @@
 """Security hardening: URL allow-list, header injection, token auth, credential policy."""
 
 import asyncio
-import logging
 
 import httpx
 import pytest
@@ -82,37 +81,13 @@ def test_parse_categories():
         _parse_categories(" , ")
 
 
-def test_http_credential_policy(monkeypatch, caplog):
-    monkeypatch.setattr(config, "FALLBACK_EMAIL", "a@icloud.com")
-    monkeypatch.setattr(config, "FALLBACK_PASSWORD", "pw")
-
-    monkeypatch.setattr(config, "MCP_AUTH_TOKEN", None)
-    monkeypatch.setattr(config, "ALLOW_ENV_CREDENTIALS", None)
-    with caplog.at_level(logging.WARNING):
-        assert server._http_credential_policy() == []
-    assert config.ENV_CREDENTIALS_ACTIVE is False
-    assert "ignored over HTTP" in caplog.text
-
-    monkeypatch.setattr(config, "MCP_AUTH_TOKEN", "s3cret")
-    middleware = server._http_credential_policy()
-    assert config.ENV_CREDENTIALS_ACTIVE is True
-    assert len(middleware) == 1
-
-    monkeypatch.setattr(config, "MCP_AUTH_TOKEN", None)
-    monkeypatch.setattr(config, "ALLOW_ENV_CREDENTIALS", True)
-    server._http_credential_policy()
-    assert config.ENV_CREDENTIALS_ACTIVE is True
-
-    config.ENV_CREDENTIALS_ACTIVE = True  # restore for other tests
-
-
-def test_env_credentials_ignored_when_inactive(monkeypatch):
-    from icloud_mcp import auth
-
-    monkeypatch.setattr(auth, "_request_headers", lambda: {})
-    monkeypatch.setattr(config, "ENV_CREDENTIALS_ACTIVE", False)
-    with pytest.raises(auth.AuthenticationError):
-        auth.get_credentials()
+def test_http_requires_strong_token(monkeypatch):
+    for weak in (None, "", "short"):
+        monkeypatch.setattr(config, "MCP_AUTH_TOKEN", weak)
+        with pytest.raises(SystemExit, match="MCP_AUTH_TOKEN"):
+            server._http_auth_middleware()
+    monkeypatch.setattr(config, "MCP_AUTH_TOKEN", "x" * server.MIN_TOKEN_LENGTH)
+    assert len(server._http_auth_middleware()) == 1
 
 
 def test_token_middleware():

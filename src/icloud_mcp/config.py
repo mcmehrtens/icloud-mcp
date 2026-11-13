@@ -87,14 +87,10 @@ class Config:
     # text, "raw" leaves it untouched.
     HTML_MODE: str = os.getenv("ICLOUD_HTML_MODE", "markdown").strip().lower()
 
-    # HTTP hardening. MCP_AUTH_TOKEN, when set, is required on every MCP request as
-    # ``Authorization: Bearer <token>`` or ``X-MCP-Token: <token>``. Environment
-    # credentials are honoured over HTTP only when a token protects the endpoint or
-    # ICLOUD_MCP_ALLOW_ENV_CREDENTIALS=true is set explicitly.
+    # HTTP hardening. MCP_AUTH_TOKEN is mandatory for the HTTP transport and is
+    # required on every MCP request as ``Authorization: Bearer <token>`` or
+    # ``X-MCP-Token: <token>``.
     MCP_AUTH_TOKEN: str | None = os.getenv("MCP_AUTH_TOKEN") or None
-    ALLOW_ENV_CREDENTIALS: bool | None = _env_bool("ICLOUD_MCP_ALLOW_ENV_CREDENTIALS", None)
-    # Set at startup by server.main(); True unless disabled for an unprotected HTTP server.
-    ENV_CREDENTIALS_ACTIVE: bool = True
 
     # Size limits
     EMAIL_BODY_MAX_CHARS: int = int(os.getenv("EMAIL_BODY_MAX_CHARS", "20000"))
@@ -125,7 +121,7 @@ class Config:
     LOCAL_FILES: bool | None = _env_bool("ICLOUD_MCP_LOCAL_FILES", None)
     LOCAL_FILES_ROOT: str | None = os.getenv("ICLOUD_MCP_LOCAL_FILES_ROOT") or None
 
-    # Fallback credentials (single-user deployments / stdio mode)
+    # The one account this server serves (the only source of credentials)
     FALLBACK_EMAIL: str | None = os.getenv("ICLOUD_EMAIL") or None
     FALLBACK_PASSWORD: str | None = os.getenv("ICLOUD_APP_SPECIFIC_PASSWORD") or None
 

@@ -463,31 +463,20 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def _http_credential_policy() -> list:
-    """Decide whether environment credentials may serve HTTP requests; build auth middleware.
+MIN_TOKEN_LENGTH = 32
 
-    Environment credentials are honoured over HTTP only when MCP_AUTH_TOKEN protects the
-    endpoint or the operator opted in with ICLOUD_MCP_ALLOW_ENV_CREDENTIALS=true.
-    """
-    has_env_creds = bool(config.FALLBACK_EMAIL and config.FALLBACK_PASSWORD)
-    allow_env = config.ALLOW_ENV_CREDENTIALS
-    if allow_env is None:
-        allow_env = bool(config.MCP_AUTH_TOKEN)
-    config.ENV_CREDENTIALS_ACTIVE = allow_env
-    if has_env_creds and not allow_env:
-        logger.warning(
-            "ICLOUD_EMAIL/ICLOUD_APP_SPECIFIC_PASSWORD are set but ignored over HTTP because the "
-            "endpoint is unprotected. Set MCP_AUTH_TOKEN, or ICLOUD_MCP_ALLOW_ENV_CREDENTIALS=true "
-            "to serve the environment account to anyone who can reach this port."
+
+def _http_auth_middleware() -> list:
+    """Build the token middleware for the HTTP transport; refuse to start without a strong token."""
+    token = config.MCP_AUTH_TOKEN
+    if not token or len(token) < MIN_TOKEN_LENGTH:
+        raise SystemExit(
+            f"MCP_AUTH_TOKEN must be set to at least {MIN_TOKEN_LENGTH} characters for the HTTP "
+            "transport (e.g. `openssl rand -hex 32`)."
         )
-    if not config.MCP_AUTH_TOKEN:
-        logger.warning("MCP_AUTH_TOKEN is not set: the HTTP endpoint accepts requests from anyone.")
-    middleware = []
-    if config.MCP_AUTH_TOKEN:
-        from starlette.middleware import Middleware
+    from starlette.middleware import Middleware
 
-        middleware.append(Middleware(TokenAuthMiddleware, token=config.MCP_AUTH_TOKEN))
-    return middleware
+    return [Middleware(TokenAuthMiddleware, token=token)]
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -502,7 +491,7 @@ def main(argv: list[str] | None = None) -> None:
         config.LOCAL_FILES = not use_http
 
     if use_http:
-        middleware = _http_credential_policy()
+        middleware = _http_auth_middleware()
 
         logger.info(
             "Starting iCloud MCP %s on http://%s:%s%s (stateless=%s, local_files=%s)",
