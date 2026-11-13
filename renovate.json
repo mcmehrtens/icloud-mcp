@@ -11,6 +11,7 @@
   "minimumReleaseAge": "3 days",
   "internalChecksFilter": "strict",
   "prConcurrentLimit": 5,
+  "prHourlyLimit": 0,
   "lockFileMaintenance": {
     "enabled": true,
     "automerge": true,
