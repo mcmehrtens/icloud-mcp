@@ -1,9 +1,8 @@
 name: ci
 
-# Every PR: lint, test and build the image (not pushed).
-# Every push to `hardened`: the same, then tag the next vMAJOR.MINOR.PATCH and publish
-#   ghcr.io/<owner>/icloud-mcp:MAJOR, :MAJOR.MINOR, :MAJOR.MINOR.PATCH and :sha-<commit>.
-# MAJOR.MINOR comes from HARDENED_VERSION; PATCH increments automatically.
+# Gates every PR and every push to `hardened`: lint, tests and workflow audits
+# (scripts/verify.sh, the same script the pre-push hook runs), then an image build.
+# Nothing is published here; release.yml publishes once a day from a green HEAD.
 
 on:
   push:
@@ -33,69 +32,13 @@ jobs:
   image:
     needs: test
     runs-on: ubuntu-24.04
-    permissions:
-      contents: write # push the release tag
-      packages: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 0
-          persist-credentials: ${{ github.event_name == 'push' }}
-
-      - id: version
-        if: github.event_name == 'push'
-        run: |
-          base="$(tr -d '[:space:]' < HARDENED_VERSION)"
-          if [[ ! "$base" =~ ^[0-9]+\.[0-9]+$ ]]; then
-            echo "HARDENED_VERSION must be MAJOR.MINOR, got '$base'" >&2
-            exit 1
-          fi
-          major="${base%%.*}"
-          last="$(git tag --list "v${base}.*" --sort=-v:refname | head -n1)"
-          if [ -z "$last" ]; then patch=0; else patch=$(( ${last##*.} + 1 )); fi
-          version="${base}.${patch}"
-          {
-            echo "major=$major"
-            echo "minor=$base"
-            echo "version=$version"
-          } >> "$GITHUB_OUTPUT"
-
-      - id: meta
-        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
-        with:
-          images: ghcr.io/${{ github.repository_owner }}/icloud-mcp
-          flavor: latest=false
-          tags: |
-            type=raw,value=${{ steps.version.outputs.version }},enable=${{ github.event_name == 'push' }}
-            type=raw,value=${{ steps.version.outputs.minor }},enable=${{ github.event_name == 'push' }}
-            type=raw,value=${{ steps.version.outputs.major }},enable=${{ github.event_name == 'push' }}
-            type=sha,format=long
-          labels: |
-            org.opencontainers.image.version=${{ steps.version.outputs.version }}
-
+          persist-credentials: false
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
-
-      - if: github.event_name == 'push'
-        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
       - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           platforms: linux/amd64
-          push: ${{ github.event_name == 'push' }}
-          provenance: ${{ github.event_name == 'push' }}
-          sbom: ${{ github.event_name == 'push' }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-
-      # Tag only after the image is published, so a tag always has an image.
-      - if: github.event_name == 'push'
-        env:
-          VERSION: ${{ steps.version.outputs.version }}
-        run: |
-          git tag "v${VERSION}" "${GITHUB_SHA}"
-          git push origin "v${VERSION}"
+          push: false

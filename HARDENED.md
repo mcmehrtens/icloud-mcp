@@ -30,8 +30,12 @@ list (for example, it denies `email_get_attachment` and the mark-read tools).
 
 ## Images and versions
 
-Every push to `hardened` that passes CI publishes `ghcr.io/mcmehrtens/icloud-mcp` with
-these tags:
+`ci.yml` gates every PR and push (tests plus an image build) but publishes nothing.
+`release.yml` runs daily at 15:00 UTC, two hours after Renovate. If `hardened` has
+unreleased commits and `ci` passed on its HEAD, it publishes
+`ghcr.io/mcmehrtens/icloud-mcp` with the tags below. Otherwise it skips. So a day of
+small changes ships as one release, and an unchanged day ships nothing. Run it by
+hand with `gh workflow run release.yml`.
 
 | Tag | Moves? | Use |
 | - | - | - |
@@ -41,7 +45,7 @@ these tags:
 | `:sha-<commit>` | No | Exact build |
 
 `MAJOR.MINOR` comes from `HARDENED_VERSION`, and `PATCH` increments automatically
-(git tag `v1.0.7`). Bump `HARDENED_VERSION` to `2.0` only for a change that needs the
+(git tag `v1.0.7`, created after the image is pushed). Bump `HARDENED_VERSION` to `2.0` only for a change that needs the
 deployment to change too, such as a new required env var or a renamed or removed tool
 the gateway allowlist refers to. The NAS then stays on `:1` until you move it.
 
@@ -56,8 +60,8 @@ in `scripts/verify.sh` and GitHub Actions (SHA-pinned):
   enforces the same cooldown for a manual `uv lock`. Security fixes also wait 3 days,
   because the lock can't resolve anything newer. For an urgent one, run
   `uv lock --upgrade-package <pkg> --exclude-newer-package <pkg>=<timestamp>` by hand.
-- **Patch, minor and digest** updates automerge once CI is green, which publishes a
-  new `:1`.
+- **Patch, minor and digest** updates automerge once CI is green, and go out in that
+  day's release.
 - **Major** updates, and a Python minor (3.13 to 3.14), open a PR labelled
   `needs-review` and wait for a human or an LLM.
 - **GitHub Actions** come in one grouped PR on Saturdays, labelled `needs-allowlist`,
@@ -135,7 +139,7 @@ Docker build that CI's `image` job does). If a push gets past the hook, CI passe
    ```
 
    Default workflow token: **read repository contents**.
-3. **Ruleset on `hardened`:** require the `test` and `image` checks (Renovate's
+3. **Ruleset on `hardened`:** require the `test` and `image` checks from `ci` (Renovate's
    automerge waits on them), and enable **Allow auto-merge** in Settings → General.
 4. **Package visibility:** after the first image is published, go to Packages →
    `icloud-mcp` and make it **public** (it contains no secrets), so the NAS can pull
