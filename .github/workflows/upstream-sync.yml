@@ -24,7 +24,7 @@ concurrency:
 
 jobs:
   merge:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     outputs:
       count: ${{ steps.check.outputs.count }}
       upstream_sha: ${{ steps.check.outputs.upstream_sha }}
@@ -86,7 +86,7 @@ jobs:
   publish:
     needs: merge
     if: needs.merge.outputs.count != '0' && needs.merge.outputs.conflict == 'false'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     env:
       COUNT: ${{ needs.merge.outputs.count }}
       UPSTREAM_SHA: ${{ needs.merge.outputs.upstream_sha }}
@@ -140,7 +140,7 @@ jobs:
   conflict:
     needs: merge
     if: needs.merge.outputs.conflict == 'true'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions:
       issues: write
     env:
