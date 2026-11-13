@@ -26,9 +26,10 @@ Conventions:
 - Email message IDs are IMAP UIDs and are only valid within the folder they came from; always pass the same `folder`.
 - Times: pass ISO 8601 without offset ("2025-06-01T10:00:00") together with an IANA `timezone`, or a plain date ("2025-06-01") for all-day events. Server default timezone: {config.DEFAULT_TIMEZONE}.
 - Reminders lists appear as calendars with read_only=true; events cannot be created there.
-- Recurring events are expanded by calendar_list_events: each occurrence is a separate entry sharing the series id; update/delete affect the whole series.
+- Recurring events are expanded by calendar_list_events: each occurrence is a separate entry sharing the series id; updates affect the whole series.
+- This server cannot delete or move anything: there are no delete tools for events, contacts or mail.
 - Email bodies are converted to readable text and truncated to {config.EMAIL_BODY_MAX_CHARS} characters; use email_get_message with full_html=true for the raw HTML.
-- Sending mail, creating/updating/deleting events and contacts are irreversible: confirm the details with the user first when in doubt. Use email_save_draft when the user wants to review before sending.
+- Sending mail and creating/updating events are irreversible: confirm the details with the user first when in doubt. Use email_save_draft when the user wants to review before sending.
 - Enabled tool groups: {", ".join(sorted(config.ENABLED_CATEGORIES))}.{" Outbound recipients are restricted by EMAIL_SEND_ALLOWLIST." if config.EMAIL_SEND_ALLOWLIST else ""}
 """
 
@@ -151,7 +152,7 @@ def calendar_list_events(
     Each entry has id/url, summary, description, location, start, end (ISO 8601 with offset,
     or a date for all_day events), start_timezone, recurring, rrule, attendees and calendar.
     Recurring series are expanded into one entry per occurrence; all occurrences share the
-    series id, so update/delete apply to the whole series.
+    series id, so updates apply to the whole series.
     """
     return _run(calendar.list_events, calendar_id, start_date, end_date)
 
@@ -244,20 +245,11 @@ def calendar_update_event(
     )
 
 
-@tool("calendar", annotations=DESTRUCTIVE)
-def calendar_delete_event(event_id: EventId) -> dict[str, Any]:
-    """Delete an event (the whole series for recurring events) and email cancellations to its attendees."""
-    return _run(calendar.delete_event, event_id)
-
-
 # ---------------------------------------------------------------------------
 # Contacts
 # ---------------------------------------------------------------------------
 
 ContactId = Annotated[str, Field(description="Contact URL/ID from contacts_list or contacts_search.")]
-Phones = Annotated[list[str] | None, Field(description="Phone numbers.")]
-Emails = Annotated[list[str] | None, Field(description="Email addresses.")]
-Addresses = Annotated[list[str] | None, Field(description="Postal addresses, one string each.")]
 
 
 @tool("contacts", annotations=READ_ONLY)
@@ -281,42 +273,6 @@ def contacts_search(
 def contacts_get(contact_id: ContactId) -> dict[str, Any]:
     """Get one contact with all fields."""
     return _run(contacts.get_contact, contact_id)
-
-
-@tool("contacts", annotations=WRITE)
-def contacts_create(
-    name: Annotated[str, Field(description="Full name, e.g. 'Jane Doe'.")],
-    phones: Phones = None,
-    emails: Emails = None,
-    addresses: Addresses = None,
-    organization: Annotated[str | None, Field(description="Company / organization.")] = None,
-    title: Annotated[str | None, Field(description="Job title.")] = None,
-    notes: Annotated[str | None, Field(description="Free-text notes.")] = None,
-) -> dict[str, Any]:
-    """Create a contact in the default address book and return it with its id/url."""
-    return _run(contacts.create_contact, name, phones, emails, addresses, organization, title, notes)
-
-
-@tool("contacts", annotations=DESTRUCTIVE)
-def contacts_update(
-    contact_id: ContactId,
-    name: Annotated[str | None, Field(description="New full name.")] = None,
-    phones: Annotated[list[str] | None, Field(description="New phone list (replaces existing).")] = None,
-    emails: Annotated[list[str] | None, Field(description="New email list (replaces existing).")] = None,
-    addresses: Annotated[list[str] | None, Field(description="New address list (replaces existing).")] = None,
-    organization: Annotated[str | None, Field(description="New organization.")] = None,
-    title: Annotated[str | None, Field(description="New job title.")] = None,
-    notes: Annotated[str | None, Field(description="New notes (empty string clears).")] = None,
-) -> dict[str, Any]:
-    """Update a contact. Only provided fields change; list fields replace the existing values
-    (entries that keep the same number/address keep their labels such as home/work)."""
-    return _run(contacts.update_contact, contact_id, name, phones, emails, addresses, organization, title, notes)
-
-
-@tool("contacts", annotations=DESTRUCTIVE)
-def contacts_delete(contact_id: ContactId) -> dict[str, str]:
-    """Delete a contact permanently."""
-    return _run(contacts.delete_contact, contact_id)
 
 
 # ---------------------------------------------------------------------------
@@ -467,26 +423,6 @@ def email_save_draft(
         mail_module.save_draft,
         to, subject, body, cc, bcc, html, attachment_paths, reply_to_message_id, reply_to_folder,
     )
-
-
-@tool("email", annotations=DESTRUCTIVE)
-def email_move(
-    message_id: MessageId,
-    from_folder: Annotated[str, Field(description="Current folder of the message.")],
-    to_folder: Annotated[str, Field(description="Destination folder (must exist; see email_list_folders).")],
-) -> dict[str, str]:
-    """Move a message to another folder. The message gets a new UID in the destination folder."""
-    return _run(mail_module.move_message, message_id, from_folder, to_folder)
-
-
-@tool("email", annotations=DESTRUCTIVE)
-def email_delete(
-    message_id: MessageId,
-    folder: Folder = "INBOX",
-    permanent: Annotated[bool, Field(description="True: delete permanently. False (default): move to the Trash folder ('Deleted Messages' on iCloud).")] = False,
-) -> dict[str, str]:
-    """Move a message to Trash, or delete it permanently."""
-    return _run(mail_module.delete_message, message_id, folder, permanent)
 
 
 @tool("email", annotations=WRITE)

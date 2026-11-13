@@ -41,11 +41,8 @@ def test_calendar_client_refuses_foreign_host():
 
 def test_contacts_refuse_foreign_host(monkeypatch):
     monkeypatch.setattr(contacts, "require_auth", lambda: ("me@icloud.com", "pw"))
-    for fn in (contacts.get_contact, contacts.delete_contact):
-        with pytest.raises(ValueError, match="untrusted host"):
-            fn("https://evil.example/card.vcf")
     with pytest.raises(ValueError, match="untrusted host"):
-        contacts.update_contact("https://evil.example/card.vcf", name="x")
+        contacts.get_contact("https://evil.example/card.vcf")
 
 
 def test_parse_recipients_validates_and_rejects_injection():

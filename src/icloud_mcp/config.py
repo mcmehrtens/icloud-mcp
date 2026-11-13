@@ -80,7 +80,6 @@ class Config:
 
     # Mail folders (iCloud names; discovered via IMAP special-use flags when possible)
     SENT_FOLDER: str = os.getenv("SENT_FOLDER", "Sent Messages")
-    TRASH_FOLDER: str = os.getenv("TRASH_FOLDER", "Deleted Messages")
     DRAFTS_FOLDER: str = os.getenv("DRAFTS_FOLDER", "Drafts")
 
     # Which tool groups to expose: any of calendar, contacts, email (alias: mail).

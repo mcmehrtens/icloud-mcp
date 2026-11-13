@@ -33,7 +33,6 @@ logger = logging.getLogger(__name__)
 
 BODY_KEYS = (b"BODY[]", "BODY[]", b"RFC822", "RFC822", b"BODY.PEEK[]")
 SENT_CANDIDATES = ("Sent Messages", "Sent", "Sent Items", "Sent Mail")
-TRASH_CANDIDATES = ("Deleted Messages", "Trash", "Deleted Items", "Bin")
 DRAFTS_CANDIDATES = ("Drafts", "Draft")
 
 
@@ -134,28 +133,6 @@ def append_to_drafts(client: IMAPClient, raw_message: bytes) -> str:
         raise ValueError("Could not find the Drafts folder (see email_list_folders); set DRAFTS_FOLDER")
     client.append(folder, raw_message, flags=["\\Draft", "\\Seen"])
     return folder
-
-
-def move_messages(client: IMAPClient, uids: list[int], to_folder: str) -> None:
-    """MOVE when the server supports it, else COPY + delete + UID EXPUNGE."""
-    if client.has_capability("MOVE"):
-        client.move(uids, to_folder)
-        return
-    client.copy(uids, to_folder)
-    client.delete_messages(uids)
-    _expunge(client, uids)
-
-
-def _expunge(client: IMAPClient, uids: list[int]) -> None:
-    if client.has_capability("UIDPLUS"):
-        client.uid_expunge(uids)
-    else:
-        client.expunge()
-
-
-def permanently_delete(client: IMAPClient, uids: list[int]) -> None:
-    client.delete_messages(uids)
-    _expunge(client, uids)
 
 
 # ---------------------------------------------------------------------------

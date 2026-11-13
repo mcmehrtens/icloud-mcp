@@ -9,9 +9,7 @@ from typing import Any
 from imapclient import IMAPClient
 
 from .auth import require_auth
-from .config import config
 from .mail_utils import (
-    TRASH_CANDIDATES,
     append_to_drafts,
     append_to_sent,
     bare_addresses,
@@ -23,15 +21,12 @@ from .mail_utils import (
     extract_message_body,
     fetch_message,
     find_attachment,
-    find_special_folder,
     flags_from_data,
     get_imap_client,
     get_smtp_client,
     list_attachments,
     message_summary,
-    move_messages,
     parse_recipients,
-    permanently_delete,
     raw_message_from_data,
     resolve_local_path,
     validate_header_text,
@@ -488,42 +483,6 @@ def save_draft(
         "subject": subject,
         "attachments": [p.get_filename() for p in parts],
     }
-
-
-def move_message(message_id: str, from_folder: str, to_folder: str) -> dict[str, str]:
-    username, password = require_auth()
-    client = get_imap_client(username, password)
-    try:
-        client.select_folder(from_folder)
-        move_messages(client, [_uid(message_id)], to_folder)
-        return {"status": "success", "message": f"Message {message_id} moved from {from_folder} to {to_folder}"}
-    finally:
-        close_imap_client(client)
-
-
-def delete_message(message_id: str, folder: str = "INBOX", permanent: bool = False) -> dict[str, str]:
-    username, password = require_auth()
-    client = get_imap_client(username, password)
-    try:
-        client.select_folder(folder)
-        uid = _uid(message_id)
-        if permanent:
-            permanently_delete(client, [uid])
-            return {"status": "success", "message": f"Message {message_id} permanently deleted"}
-
-        trash = find_special_folder(client, b"\\Trash", config.TRASH_FOLDER, TRASH_CANDIDATES)
-        if not trash:
-            raise ValueError(
-                "Could not find the Trash folder. Pass permanent=true to delete permanently, "
-                "or move the message with email_move."
-            )
-        if folder.lower() == trash.lower():
-            permanently_delete(client, [uid])
-            return {"status": "success", "message": f"Message {message_id} permanently deleted from {trash}"}
-        move_messages(client, [uid], trash)
-        return {"status": "success", "message": f"Message {message_id} moved to {trash}"}
-    finally:
-        close_imap_client(client)
 
 
 def _set_seen(message_id: str, folder: str, seen: bool) -> dict[str, str]:

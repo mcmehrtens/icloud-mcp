@@ -164,12 +164,6 @@ def test_search_builds_and_criteria(fake_imap):
     assert crit[4] == "SINCE"
 
 
-def test_delete_moves_to_trash(fake_imap):
-    result = _call("email_delete", message_id="1").structured_content
-    assert fake_imap.moved == [([1], "Deleted Messages")]
-    assert "Deleted Messages" in result["message"]
-
-
 def test_mark_unread(fake_imap):
     _call("email_mark_unread", message_id="1")
     assert fake_imap.flags_set == [("remove", [1], ["\\Seen"])]
@@ -228,7 +222,7 @@ def test_instructions_and_annotations():
 
     tools, instructions = asyncio.run(run())
     assert "iCloud MCP server" in (instructions or "")
-    assert tools["email_delete"].annotations.destructive_hint is True
+    assert tools["calendar_update_event"].annotations.destructive_hint is True
     assert tools["calendar_list_events"].annotations.read_only_hint is True
     for name in ("calendar_list_subscriptions", "calendar_list_subscribed_events"):
         assert tools[name].annotations.read_only_hint is True
@@ -257,5 +251,25 @@ def test_send_rejects_header_injection(fake_imap, monkeypatch):
 
 
 def test_foreign_event_url_is_rejected():
-    result = _call("calendar_delete_event", event_id="https://evil.example/e.ics")
+    result = _call("calendar_update_event", event_id="https://evil.example/e.ics", summary="x")
     assert result.is_error and "untrusted host" in result.content[0].text
+
+
+def _tool_names():
+    async def run():
+        async with Client(server.mcp) as client:
+            return {t.name for t in await client.list_tools()}
+
+    return asyncio.run(run())
+
+
+def test_destructive_tools_are_gone():
+    removed = {
+        "email_move",
+        "email_delete",
+        "calendar_delete_event",
+        "contacts_create",
+        "contacts_update",
+        "contacts_delete",
+    }
+    assert not removed & _tool_names()
