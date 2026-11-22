@@ -127,7 +127,7 @@ Docker build that CI's `image` job does). If a push gets past the hook, CI passe
 
    ```text
    actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-   actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510
+   actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc
    actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
    actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
    astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2
@@ -135,7 +135,7 @@ Docker build that CI's `image` job does). If a push gets past the hook, CI passe
    docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550
    docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302
    docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069
-   renovatebot/github-action@266fef21329c44765ad42f9dea1f01f5d2d91084
+   renovatebot/github-action@acdd6bda8b035c99ce59d5675816af2aa65a1774
    ```
 
    Default workflow token: **read repository contents**.
