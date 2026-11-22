@@ -6,16 +6,17 @@
     "docker:pinDigests"
   ],
   "baseBranchPatterns": ["hardened"],
-  "timezone": "America/Chicago",
+  "timezone": "UTC",
+  "schedule": ["* 13-14 * * *"],
   "labels": ["dependencies"],
   "minimumReleaseAge": "3 days",
   "internalChecksFilter": "strict",
-  "prConcurrentLimit": 5,
+  "prConcurrentLimit": 0,
   "prHourlyLimit": 0,
   "lockFileMaintenance": {
     "enabled": true,
     "automerge": true,
-    "schedule": ["on saturday"]
+    "schedule": ["* 13-14 * * 6"]
   },
   "vulnerabilityAlerts": {
     "enabled": true,
@@ -65,7 +66,7 @@
       "matchManagers": ["github-actions"],
       "matchUpdateTypes": ["!lockFileMaintenance"],
       "groupName": "github actions",
-      "schedule": ["on saturday"],
+      "schedule": ["* 13-14 * * 6"],
       "automerge": false,
       "labels": ["dependencies", "actions", "needs-allowlist"]
     },
