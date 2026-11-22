@@ -4,8 +4,8 @@ requires-python = ">=3.11"
 resolution-markers = [
     "python_full_version >= '3.15'",
     "python_full_version == '3.14.*' and sys_platform == 'emscripten'",
-    "python_full_version >= '3.12' and python_full_version < '3.14' and sys_platform == 'emscripten'",
     "python_full_version == '3.14.*' and sys_platform != 'emscripten'",
+    "python_full_version >= '3.12' and python_full_version < '3.14' and sys_platform == 'emscripten'",
     "python_full_version < '3.12' or (python_full_version >= '3.12' and python_full_version < '3.14' and sys_platform != 'emscripten')",
 ]
 
@@ -830,15 +830,15 @@ wheels = [
 
 [[package]]
 name = "inscriptis"
-version = "2.7.6"
+version = "2.7.7"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "lxml" },
     { name = "requests" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/c0/ba/0c1c15d3975fb4fdc9ccb2a857086bd29c84bb2f3a63a4f37ca0941920e4/inscriptis-2.7.6.tar.gz", hash = "sha256:b8fe23c5ae4db33c9d1c5e1b7d000dbfa1decbea7b605ac87e0f5d8f8abc3ce6", size = 997650, upload-time = "2026-10-23T19:33:13.59Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/20/a1/5d24cf6443a7bd0233a72de98bef624856970ddb3849fdc27751de0f0678/inscriptis-2.7.7.tar.gz", hash = "sha256:d98d6a2e06dbc21f087a6938efa59fb5746483c0e4ee2174a93936633c5fab2d", size = 1599339, upload-time = "2026-11-19T13:15:03.267Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/bd/57/66719bc368a5893d5144d2843b1bac7f16b1373bf5bdd15ddeaf0a9808ea/inscriptis-2.7.6-py3-none-any.whl", hash = "sha256:bd0e86bc48c1e42b9e6e0000c47a9232214b6d89b124168ac3ec2abca23bbf5c", size = 48006, upload-time = "2026-10-23T19:33:11.433Z" },
+    { url = "https://files.pythonhosted.org/packages/6d/87/f6f09fa45808a22ebcd3cdd4580098c3a001a2f050cf1455b17189a698d3/inscriptis-2.7.7-py3-none-any.whl", hash = "sha256:3937b9dee5df4386e3873639c64aa63684559e28551dba1e1faedc4f67308128", size = 48210, upload-time = "2026-11-19T13:15:01.336Z" },
 ]
 
 [[package]]
