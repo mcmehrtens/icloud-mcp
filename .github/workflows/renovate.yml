@@ -1,14 +1,16 @@
 name: renovate
 
 # Self-hosted Renovate with a GitHub App token, so its PRs trigger the gating CI
-# (PRs made with the default GITHUB_TOKEN would not). Runs daily so dependency and
-# base-image updates flow quickly (still behind the 3-day minimumReleaseAge). The
-# GitHub Actions group is scheduled for Saturdays in renovate.json. Run it now with
-# `gh workflow run renovate.yml` (add `-f logLevel=debug` to troubleshoot).
+# (PRs made with the default GITHUB_TOKEN would not). Runs hourly so Dependency
+# Dashboard and PR checkboxes take effect within the hour and open PRs stay rebased.
+# The `schedule` in renovate.json still limits *new* branches to 13:00-14:59 UTC
+# daily (Saturdays for the GitHub Actions group and lockfile maintenance), behind the
+# 3-day minimumReleaseAge. Minute 23 avoids GitHub's top-of-hour scheduling delays.
+# Run it now with `gh workflow run renovate.yml` (add `-f logLevel=debug` to troubleshoot).
 
 on:
   schedule:
-    - cron: "0 13 * * *"
+    - cron: "23 * * * *"
   workflow_dispatch:
     inputs:
       logLevel:

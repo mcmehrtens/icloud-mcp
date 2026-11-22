@@ -31,8 +31,8 @@ list (for example, it denies `email_get_attachment` and the mark-read tools).
 ## Images and versions
 
 `ci.yml` gates every PR and push (tests plus an image build) but publishes nothing.
-`release.yml` runs daily at 15:00 UTC, two hours after Renovate. If `hardened` has
-unreleased commits and `ci` passed on its HEAD, it publishes
+`release.yml` runs daily at 15:00 UTC, after Renovate's 13:00-14:59 window. If
+`hardened` has unreleased commits and `ci` passed on its HEAD, it publishes
 `ghcr.io/mcmehrtens/icloud-mcp` with the tags below. Otherwise it skips. So a day of
 small changes ships as one release, and an unchanged day ships nothing. Run it by
 hand with `gh workflow run release.yml`.
@@ -51,7 +51,7 @@ the gateway allowlist refers to. The NAS then stays on `:1` until you move it.
 
 ## Dependency updates (Renovate)
 
-Renovate is self-hosted (`.github/workflows/renovate.yml`, daily at 13:00 UTC) and uses
+Renovate is self-hosted (`.github/workflows/renovate.yml`, hourly) and uses
 a GitHub App token, so its PRs trigger the gating CI. `renovate.json` covers Python
 dependencies (`uv.lock`), Dockerfile base images (digest-pinned), the actionlint image
 in `scripts/verify.sh` and GitHub Actions (SHA-pinned):
@@ -68,6 +68,12 @@ in `scripts/verify.sh` and GitHub Actions (SHA-pinned):
   and never automerge. The Actions allowlist pins exact SHAs, so the PR fails with
   `startup_failure` until you add its new SHAs (then drop the old ones after merging).
 - `uv.lock` maintenance runs on Saturdays.
+- **Timing:** the workflow runs every hour, so Dependency Dashboard and PR checkboxes
+  act within the hour and open PRs stay rebased. New branches are only created
+  13:00-14:59 UTC (`schedule` in `renovate.json`, which uses UTC like the workflow
+  crons), before the 15:00 release. Updates that turn up outside that window are listed
+  under "Awaiting Schedule" on the dashboard, where a checkbox creates them right away.
+  Security fixes ignore the window. There is no cap on open PRs or PRs per hour.
 
 ## Upstream sync
 
